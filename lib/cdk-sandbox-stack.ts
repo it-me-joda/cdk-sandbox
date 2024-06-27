@@ -19,83 +19,82 @@ export class CdkSandboxStack extends cdk.Stack {
       "LambdaLoggingLayer",
       {
         code: cdk.aws_lambda.Code.fromAsset("src/layers/logging"),
-        compatibleRuntimes: [cdk.aws_lambda.Runtime.NODEJS_LATEST],
+        compatibleRuntimes: [cdk.aws_lambda.Runtime.NODEJS_20_X],
       },
     );
 
     const createLambda = new NodejsFunction(this, "CreateFunction", {
-      runtime: cdk.aws_lambda.Runtime.NODEJS_LATEST,
-      memorySize: 128,
-      timeout: cdk.Duration.seconds(5),
+      runtime: cdk.aws_lambda.Runtime.NODEJS_20_X,
+      architecture: cdk.aws_lambda.Architecture.ARM_64,
       handler: "handler",
       entry: "src/lambdas/create/index.ts",
       bundling: {
         minify: false,
         externalModules: ["logging"],
         forceDockerBundling: false,
+        sourceMap: true,
       },
     });
-    createLambda.addLayers(loggingLayer);
     table.grantReadWriteData(createLambda);
 
     const readLambda = new NodejsFunction(this, "ReadFunction", {
-      runtime: cdk.aws_lambda.Runtime.NODEJS_LATEST,
-      memorySize: 128,
-      timeout: cdk.Duration.seconds(5),
+      runtime: cdk.aws_lambda.Runtime.NODEJS_20_X,
+      architecture: cdk.aws_lambda.Architecture.ARM_64,
+      layers: [loggingLayer],
       handler: "handler",
       entry: "src/lambdas/read/index.ts",
       bundling: {
         minify: false,
         externalModules: ["logging"],
         forceDockerBundling: false,
+        sourceMap: true,
       },
     });
-    readLambda.addLayers(loggingLayer);
     table.grantReadData(readLambda);
 
     const updateLambda = new NodejsFunction(this, "UpdateFunction", {
-      runtime: cdk.aws_lambda.Runtime.NODEJS_LATEST,
-      memorySize: 128,
-      timeout: cdk.Duration.seconds(5),
+      runtime: cdk.aws_lambda.Runtime.NODEJS_20_X,
+      architecture: cdk.aws_lambda.Architecture.ARM_64,
+      layers: [loggingLayer],
       handler: "handler",
       entry: "src/lambdas/update/index.ts",
       bundling: {
         minify: false,
         externalModules: ["logging"],
         forceDockerBundling: false,
+        sourceMap: true, 
       },
     });
-    updateLambda.addLayers(loggingLayer);
     table.grantReadWriteData(updateLambda);
 
     const deleteLambda = new NodejsFunction(this, "DeleteFunction", {
-      runtime: cdk.aws_lambda.Runtime.NODEJS_LATEST,
-      memorySize: 128,
-      timeout: cdk.Duration.seconds(5),
+      runtime: cdk.aws_lambda.Runtime.NODEJS_20_X,
+      architecture: cdk.aws_lambda.Architecture.ARM_64,
+      layers: [loggingLayer],
       handler: "handler",
       entry: "src/lambdas/delete/index.ts",
       bundling: {
         minify: false,
         externalModules: ["logging"],
         forceDockerBundling: false,
+        sourceMap: true,
       },
     });
-    deleteLambda.addLayers(loggingLayer);
     table.grantReadWriteData(deleteLambda);
 
     const readAllLambda = new NodejsFunction(this, "ReadAllFunction", {
-      runtime: cdk.aws_lambda.Runtime.NODEJS_LATEST,
-      memorySize: 128,
-      timeout: cdk.Duration.seconds(5),
+      runtime: cdk.aws_lambda.Runtime.NODEJS_20_X,
+      architecture: cdk.aws_lambda.Architecture.ARM_64,
+      layers: [loggingLayer],
       handler: "handler",
       entry: "src/lambdas/read-all/index.ts",
       bundling: {
         minify: false,
         externalModules: ["logging"],
         forceDockerBundling: false,
+        sourceMap: true,
       },
     });
-    readAllLambda.addLayers(loggingLayer);
     table.grantReadData(readAllLambda);
 
     const api = new cdk.aws_apigateway.RestApi(this, "CRUDApi", {

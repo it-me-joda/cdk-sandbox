@@ -5,7 +5,8 @@ import { log } from "/opt/logging";
 const dynamo = new DynamoDB({});
 
 export const handler: APIGatewayProxyHandler = async (event) => {
-  log("delete event");
+  log("delete event", event.queryStringParameters);
+  
   if (!event.queryStringParameters || !event.queryStringParameters.id) {
     return {
       statusCode: 400,

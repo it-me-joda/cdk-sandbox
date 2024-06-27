@@ -6,7 +6,8 @@ import { DynamoDB } from "@aws-sdk/client-dynamodb";
 const dynamo = new DynamoDB({});
 
 export const handler: APIGatewayProxyHandler = async (event) => {
-  log("create event");
+  log("create event", event.body);
+  
   if (event.body === null) {
     return {
       statusCode: 400,
@@ -17,7 +18,6 @@ export const handler: APIGatewayProxyHandler = async (event) => {
   }
 
   const body = JSON.parse(event.body) as { name: string };
-  log(`body: ${event.body}`);
   if (!body.name) {
     return {
       statusCode: 400,

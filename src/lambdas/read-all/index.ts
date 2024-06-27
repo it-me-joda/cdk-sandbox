@@ -6,6 +6,7 @@ const dynamo = new DynamoDB({});
 
 export const handler: APIGatewayProxyHandler = async () => {
   log("read-all event");
+  
   const result = await dynamo.scan({
     TableName: "SANDBOX_ITEMS",
   });
