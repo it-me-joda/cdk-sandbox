@@ -1,21 +1,32 @@
 import * as cdk from 'aws-cdk-lib'
+import { ParameterMapping } from 'aws-cdk-lib/aws-apigatewayv2'
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs'
+import {
+	Choice,
+	DefinitionBody,
+	Fail,
+	Pass,
+} from 'aws-cdk-lib/aws-stepfunctions'
 import { Construct } from 'constructs'
 
 export class CdkSandboxStack extends cdk.Stack {
 	constructor(scope: Construct, id: string, props?: cdk.StackProps) {
 		super(scope, id, props)
 
-		const table = new cdk.aws_dynamodb.Table(this, 'CDKSandboxDynamo', {
-			partitionKey: {
-				name: 'id',
-				type: cdk.aws_dynamodb.AttributeType.STRING,
-			},
-			removalPolicy: cdk.RemovalPolicy.DESTROY,
-			billingMode: cdk.aws_dynamodb.BillingMode.PAY_PER_REQUEST,
-			tableName: 'SANDBOX_ITEMS',
-			tableClass: cdk.aws_dynamodb.TableClass.STANDARD,
-		})
+		const itemsTable = new cdk.aws_dynamodb.Table(
+			this,
+			'CDKSandboxDynamo',
+			{
+				partitionKey: {
+					name: 'id',
+					type: cdk.aws_dynamodb.AttributeType.STRING,
+				},
+				removalPolicy: cdk.RemovalPolicy.DESTROY,
+				billingMode: cdk.aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+				tableName: 'SANDBOX_ITEMS',
+				tableClass: cdk.aws_dynamodb.TableClass.STANDARD,
+			}
+		)
 
 		const loggingLayer = new cdk.aws_lambda.LayerVersion(
 			this,
@@ -38,7 +49,7 @@ export class CdkSandboxStack extends cdk.Stack {
 				sourceMap: true,
 			},
 		})
-		table.grantReadWriteData(createLambda)
+		itemsTable.grantReadWriteData(createLambda)
 
 		const readLambda = new NodejsFunction(this, 'ReadFunction', {
 			runtime: cdk.aws_lambda.Runtime.NODEJS_20_X,
@@ -53,7 +64,7 @@ export class CdkSandboxStack extends cdk.Stack {
 				sourceMap: true,
 			},
 		})
-		table.grantReadData(readLambda)
+		itemsTable.grantReadData(readLambda)
 
 		const updateLambda = new NodejsFunction(this, 'UpdateFunction', {
 			runtime: cdk.aws_lambda.Runtime.NODEJS_20_X,
@@ -68,7 +79,7 @@ export class CdkSandboxStack extends cdk.Stack {
 				sourceMap: true,
 			},
 		})
-		table.grantReadWriteData(updateLambda)
+		itemsTable.grantReadWriteData(updateLambda)
 
 		const deleteLambda = new NodejsFunction(this, 'DeleteFunction', {
 			runtime: cdk.aws_lambda.Runtime.NODEJS_20_X,
@@ -83,7 +94,7 @@ export class CdkSandboxStack extends cdk.Stack {
 				sourceMap: true,
 			},
 		})
-		table.grantReadWriteData(deleteLambda)
+		itemsTable.grantReadWriteData(deleteLambda)
 
 		const readAllLambda = new NodejsFunction(this, 'ReadAllFunction', {
 			runtime: cdk.aws_lambda.Runtime.NODEJS_20_X,
@@ -98,7 +109,7 @@ export class CdkSandboxStack extends cdk.Stack {
 				sourceMap: true,
 			},
 		})
-		table.grantReadData(readAllLambda)
+		itemsTable.grantReadData(readAllLambda)
 
 		const api = new cdk.aws_apigateway.RestApi(this, 'CRUDApi', {
 			restApiName: 'CRUD API',
@@ -107,6 +118,7 @@ export class CdkSandboxStack extends cdk.Stack {
 				stageName: 'dev',
 			},
 		})
+
 		const item = api.root.addResource('item')
 
 		const createIntegration = new cdk.aws_apigateway.LambdaIntegration(
@@ -133,5 +145,198 @@ export class CdkSandboxStack extends cdk.Stack {
 			readAllLambda
 		)
 		api.root.addResource('items').addMethod('GET', readAllIntegration)
+
+		const stepFunctionTable = new cdk.aws_dynamodb.Table(
+			this,
+			'StepFunctionTable',
+			{
+				partitionKey: {
+					name: 'id',
+					type: cdk.aws_dynamodb.AttributeType.STRING,
+				},
+				removalPolicy: cdk.RemovalPolicy.DESTROY,
+				billingMode: cdk.aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+				tableName: 'STEPFUNCTION_ITEMS',
+				tableClass: cdk.aws_dynamodb.TableClass.STANDARD,
+			}
+		)
+
+		// start function will take a payload and create a record for it in the dynamo
+		const startFunction = new NodejsFunction(this, 'StartFunction', {
+			runtime: cdk.aws_lambda.Runtime.NODEJS_20_X,
+			architecture: cdk.aws_lambda.Architecture.ARM_64,
+			layers: [loggingLayer],
+			handler: 'handler',
+			entry: 'src/lambdas/step-function/start/index.ts',
+			bundling: {
+				minify: false,
+				externalModules: ['logging'],
+				forceDockerBundling: false,
+				sourceMap: true,
+			},
+		})
+		stepFunctionTable.grantReadWriteData(startFunction)
+
+		// middle function will take a payload and update the record in the dynamo (doubling the value of the record)
+		const middleFunction = new NodejsFunction(this, 'MiddleFunction', {
+			runtime: cdk.aws_lambda.Runtime.NODEJS_20_X,
+			architecture: cdk.aws_lambda.Architecture.ARM_64,
+			layers: [loggingLayer],
+			handler: 'handler',
+			entry: 'src/lambdas/step-function/middle/index.ts',
+			bundling: {
+				minify: false,
+				externalModules: ['logging'],
+				forceDockerBundling: false,
+				sourceMap: true,
+			},
+		})
+		stepFunctionTable.grantReadWriteData(middleFunction)
+
+		// end function will take a payload and soft delete the record in the dynamo
+		const endFunction = new NodejsFunction(this, 'EndFunction', {
+			runtime: cdk.aws_lambda.Runtime.NODEJS_20_X,
+			architecture: cdk.aws_lambda.Architecture.ARM_64,
+			layers: [loggingLayer],
+			handler: 'handler',
+			entry: 'src/lambdas/step-function/end/index.ts',
+			bundling: {
+				minify: false,
+				externalModules: ['logging'],
+				forceDockerBundling: false,
+				sourceMap: true,
+			},
+		})
+		stepFunctionTable.grantReadWriteData(endFunction)
+
+		const startTask = new cdk.aws_stepfunctions_tasks.LambdaInvoke(
+			this,
+			'StartTask',
+			{
+				lambdaFunction: startFunction,
+				inputPath: '$',
+				outputPath: '$.Payload',
+			}
+		)
+
+		const middleJob = new cdk.aws_stepfunctions_tasks.LambdaInvoke(
+			this,
+			'MiddleJob',
+			{
+				lambdaFunction: middleFunction,
+				outputPath: '$.Payload',
+			}
+		)
+
+		const endJob = new cdk.aws_stepfunctions_tasks.LambdaInvoke(
+			this,
+			'EndJob',
+			{
+				lambdaFunction: endFunction,
+				outputPath: '$.Payload',
+			}
+		)
+
+		const definiton = startTask.next(
+			new Choice(this, 'Start Job Complete?')
+				.when(
+					cdk.aws_stepfunctions.Condition.stringEquals(
+						'$.Payload.Status',
+						'FAILED'
+					),
+					new Fail(this, 'START JOB FAILED', {
+						cause: 'Start job did not complete successfully',
+						error: 'Start job returned FAILED',
+					})
+				)
+				.otherwise(
+					middleJob.next(
+						new Choice(this, 'Middle Job Complete?')
+							.when(
+								cdk.aws_stepfunctions.Condition.stringEquals(
+									'$.Payload.Status',
+									'FAILED'
+								),
+								new Fail(this, 'MIDDLE JOB FAILED', {
+									cause: 'Middle job did not complete successfully',
+									error: 'Middle job returned FAILED',
+								})
+							)
+							.otherwise(
+								endJob.next(
+									new Choice(this, 'End Job Complete?')
+										.when(
+											cdk.aws_stepfunctions.Condition.stringEquals(
+												'$.Payload.Status',
+												'FAILED'
+											),
+											new Fail(this, 'END JOB FAILED', {
+												cause: 'End job did not complete successfully',
+												error: 'End job returned FAILED',
+											})
+										)
+										.otherwise(
+											new Pass(this, 'End Job Succeeded')
+										)
+								)
+							)
+					)
+				)
+		)
+
+		const stepFunction = new cdk.aws_stepfunctions.StateMachine(
+			this,
+			'StepFunction',
+			{
+				definitionBody: DefinitionBody.fromChainable(definiton),
+				stateMachineType:
+					cdk.aws_stepfunctions.StateMachineType.STANDARD,
+			}
+		)
+
+		const stepFunctionIntegration =
+			new cdk.aws_apigatewayv2_integrations.HttpStepFunctionsIntegration(
+				'StepFunctionIntegration',
+				{
+					parameterMapping: new ParameterMapping()
+						.custom('Input', '$request.body')
+						.custom(
+							'StateMachineArn',
+							stepFunction.stateMachineArn
+						),
+					stateMachine: stepFunction,
+					subtype:
+						cdk.aws_apigatewayv2.HttpIntegrationSubtype
+							.STEPFUNCTIONS_START_EXECUTION,
+				}
+			)
+
+		const stepFunctionApi = new cdk.aws_apigatewayv2.HttpApi(
+			this,
+			'StepFunctionApi',
+			{
+				apiName: 'StepFunctionApi',
+				defaultIntegration: stepFunctionIntegration,
+			}
+		)
+
+		stepFunctionApi.addStage('dev', {
+			stageName: 'dev',
+			autoDeploy: true,
+		})
+
+		stepFunctionApi.addStage('prod', {
+			stageName: 'prod',
+		})
+
+		stepFunctionApi.addRoutes({
+			path: '/start',
+			methods: [cdk.aws_apigatewayv2.HttpMethod.POST],
+			integration: stepFunctionIntegration,
+		})
+
+		new cdk.CfnOutput(this, 'StepFunctionApiUrl', {
+			value: stepFunctionApi.url ?? 'No URL',
+		})
 	}
 }
