@@ -16,21 +16,11 @@ export const handler: Handler = async (event: {
 	log('middle step', event)
 
 	if (event.Payload === null) {
-		return {
-			Payload: {
-				Status: 'FAILED',
-				message: 'Payload is required',
-			},
-		}
+		throw new Error('Payload is required')
 	}
 
 	if (typeof event.Payload.Item.customValue != 'number') {
-		return {
-			Payload: {
-				Status: 'FAILED',
-				message: 'Item is required and must be a number',
-			},
-		}
+		throw new Error('customValue is required and must be a number')
 	}
 
 	const newValue = event.Payload.Item.customValue * 2

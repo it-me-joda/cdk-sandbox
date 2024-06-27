@@ -16,12 +16,7 @@ export const handler: Handler = async (event: {
 	log('end step', event)
 
 	if (event.Payload === null) {
-		return {
-			Payload: {
-				Status: 'FAILED',
-				message: 'Payload is required',
-			},
-		}
+		throw new Error('Payload is required')
 	}
 
 	// soft delete the item

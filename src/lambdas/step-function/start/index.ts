@@ -9,12 +9,7 @@ export const handler: Handler = async (event: { Payload: number | string }) => {
 	log('start step', event)
 
 	if (event.Payload === null) {
-		return {
-			Payload: {
-				Status: 'FAILED',
-				message: 'Payload is required',
-			},
-		}
+		throw new Error('Payload is required')
 	}
 
 	const id = randomUUID()

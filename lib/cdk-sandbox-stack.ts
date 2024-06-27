@@ -1,12 +1,7 @@
 import * as cdk from 'aws-cdk-lib'
 import { ParameterMapping } from 'aws-cdk-lib/aws-apigatewayv2'
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs'
-import {
-	Choice,
-	DefinitionBody,
-	Fail,
-	Pass,
-} from 'aws-cdk-lib/aws-stepfunctions'
+import { DefinitionBody } from 'aws-cdk-lib/aws-stepfunctions'
 import { Construct } from 'constructs'
 
 export class CdkSandboxStack extends cdk.Stack {
@@ -237,58 +232,13 @@ export class CdkSandboxStack extends cdk.Stack {
 			}
 		)
 
-		const definiton = startTask.next(
-			new Choice(this, 'Start Job Complete?')
-				.when(
-					cdk.aws_stepfunctions.Condition.stringEquals(
-						'$.Payload.Status',
-						'FAILED'
-					),
-					new Fail(this, 'START JOB FAILED', {
-						cause: 'Start job did not complete successfully',
-						error: 'Start job returned FAILED',
-					})
-				)
-				.otherwise(
-					middleJob.next(
-						new Choice(this, 'Middle Job Complete?')
-							.when(
-								cdk.aws_stepfunctions.Condition.stringEquals(
-									'$.Payload.Status',
-									'FAILED'
-								),
-								new Fail(this, 'MIDDLE JOB FAILED', {
-									cause: 'Middle job did not complete successfully',
-									error: 'Middle job returned FAILED',
-								})
-							)
-							.otherwise(
-								endJob.next(
-									new Choice(this, 'End Job Complete?')
-										.when(
-											cdk.aws_stepfunctions.Condition.stringEquals(
-												'$.Payload.Status',
-												'FAILED'
-											),
-											new Fail(this, 'END JOB FAILED', {
-												cause: 'End job did not complete successfully',
-												error: 'End job returned FAILED',
-											})
-										)
-										.otherwise(
-											new Pass(this, 'End Job Succeeded')
-										)
-								)
-							)
-					)
-				)
-		)
+		const definition = startTask.next(middleJob).next(endJob)
 
 		const stepFunction = new cdk.aws_stepfunctions.StateMachine(
 			this,
 			'StepFunction',
 			{
-				definitionBody: DefinitionBody.fromChainable(definiton),
+				definitionBody: DefinitionBody.fromChainable(definition),
 				stateMachineType:
 					cdk.aws_stepfunctions.StateMachineType.STANDARD,
 			}
@@ -316,7 +266,6 @@ export class CdkSandboxStack extends cdk.Stack {
 			'StepFunctionApi',
 			{
 				apiName: 'StepFunctionApi',
-				defaultIntegration: stepFunctionIntegration,
 			}
 		)
 
@@ -337,6 +286,10 @@ export class CdkSandboxStack extends cdk.Stack {
 
 		new cdk.CfnOutput(this, 'StepFunctionApiUrl', {
 			value: stepFunctionApi.url ?? 'No URL',
+		})
+
+		new cdk.CfnOutput(this, 'CloudFormation URL', {
+			value: `https://${this.region}.console.aws.amazon.com/cloudformation/home?region=${this.region}#/stacks/stackinfo?filteringText=&filteringStatus=active&viewNested=true&hideStacks=false&stackId=${this.stackId}`,
 		})
 	}
 }
